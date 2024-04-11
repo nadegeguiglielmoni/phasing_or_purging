@@ -194,3 +194,59 @@ polish_medaka_command = singularity exec -B `pwd -P`:`pwd -P`  -B /tmp:/tmp meda
 ```sh
 verkko -d verkko_v141 --hifi hifi_reads.filtlong.fastq.gz --nano ont_reads.fastq.gz --min-ont-length 30000
 ```
+
+## Decontamination
+
+[BLAST](https://www.ncbi.nlm.nih.gov/geo/query/blast.html) v2.10.0
+```sh
+blastn -query assembly.fasta -db nt -outfmt "6 qseqid staxids bitscore std sscinames scomnames" \
+               -max_hsps 1 -evalue 1e-25 -out assembly.fasta.blast.out
+```
+
+[minimap2](https://github.com/lh3/minimap2) v2.24
+```sh
+# for Nanopore reads
+minimap2 -ax map-ont assembly.fasta ont_reads.trimmed.fastq.gz | samtools sort > minimap2.assembly.bam
+
+# for HiFi reads
+minimap2 -ax map-hifi assembly.fasta hifi_reads.fastq.gz | samtools sort > minimap2.assembly.bam
+```
+
+[BUSCO](https://gitlab.com/ezlab/busco) v5.4.7
+```sh
+docker run -u $(id -u) -v $(pwd):/busco_wd ezlabgva/busco:v5.4.7_cv1 busco -i assembly.fasta -o busco_metazoa_odb10_assembly -m genome -l metazoa_odb10
+```
+
+[BlobToolKit](https://blobtoolkit.genomehubs.org/) v4.3.2
+```sh
+blobtools add --fasta assembly.fasta --cov minimap2.assembly.bam --hits assembly.fasta.blast.out --busco busco_metazoa_odb10_assembly/run_metazoa_odb10/full_table.tsv --taxdump taxdump --create blobdir_out
+blobtools view blobdir_out
+```
+
+## Haplotig purging
+
+```sh
+# for Nanopore reads
+minimap2 -x map-ont assembly.fasta ont_reads.trimmed.fastq.gz | gzip -c - > minimap2.assembly.paf.gz
+
+# for HiFi reads
+minimap2 -x map-hifi assembly.fasta hifi_reads.fastq.gz | gzip -c - > minimap2.assembly.paf.gz
+        
+pbcstat minimap2.assembly.paf.gz 
+calcuts PB.stat > cutoffs 2>calcults.log
+
+hist_plot.py -c cutoffs PB.stat purge_dups.${pri_asm}.png
+
+split_fa assembly.fasta > assembly.fasta.split
+minimap2 -xasm5 -DP assembly.fasta.split assembly.fasta.split | gzip -c - > assembly.fasta.split.self.paf.gz
+
+purge_dups -2 -T cutoffs -c PB.base.cov assembly.fasta.split.self.paf.gz > dups.bed 2> purge_dups.log
+get_seqs dups.bed assembly.fasta
+```
+
+## Assembly evaluation
+
+```sh
+docker run -u $(id -u) -v $(pwd):/busco_wd ezlabgva/busco:v5.4.7_cv1 busco -i assembly.fasta -o busco_metazoa_odb10_assembly -m genome -l metazoa_odb10
+docker run -u $(id -u) -v $(pwd):/busco_wd ezlabgva/busco:v5.4.7_cv1 busco -i assembly.fasta -o busco_nematoda_odb10_assembly -m genome -l nematoda_odb10
+```
