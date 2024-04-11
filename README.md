@@ -190,7 +190,7 @@ polish_cns_options=
 polish_medaka_command = singularity exec -B `pwd -P`:`pwd -P`  -B /tmp:/tmp medaka_v1.7.2.sif medaka
 ```
 
-Verkko v0.0.3
+[Verkko](https://github.com/marbl/verkko) v0.0.3
 ```sh
 verkko -d verkko_v141 --hifi hifi_reads.filtlong.fastq.gz --nano ont_reads.fastq.gz --min-ont-length 30000
 ```
